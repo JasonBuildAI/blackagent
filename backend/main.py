@@ -50,9 +50,9 @@ async def lifespan(app: FastAPI):
 
     async with async_session_factory() as db:
         await settings_service.init_default_settings(db)
+        await db.commit()
         logger.info("系统设置初始化完成")
 
-    # 如果需要，填充模拟数据
     if app_settings.SEED_ON_STARTUP:
         from app.services.ingestion import ingestion_service
         from app.database import async_session_factory
@@ -60,8 +60,9 @@ async def lifespan(app: FastAPI):
         async with async_session_factory() as db:
             result = await ingestion_service.ingest_from_mock_sources(
                 db=db,
-                count=50,  # 默认填充50条
+                count=50,
             )
+            await db.commit()
             logger.info(
                 f"模拟数据填充完成: 生成={result['total_generated']}, "
                 f"新增={result['new_items']}, 重复={result['duplicates']}"
@@ -106,7 +107,7 @@ async def health_check():
     return {
         "status": "ok",
         "version": "1.0.0",
-        "llm_enabled": settings.LLM_ENABLED,
+        "llm_enabled": app_settings.LLM_ENABLED,
         "database": "connected",
     }
 

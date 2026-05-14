@@ -301,15 +301,33 @@ export default function IntelligenceDetail() {
         </div>
       </div>
 
-      {/* Entities section placeholder */}
+      {/* Entities section */}
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 md:p-6">
         <div className="flex items-center gap-2 mb-3">
           <FileText className="w-4 h-4 text-slate-400" />
           <h3 className="text-sm font-semibold text-white">关联实体</h3>
+          {item.entities && item.entities.length > 0 && (
+            <span className="text-xs text-slate-500 ml-1">({item.entities.length})</span>
+          )}
         </div>
-        <p className="text-xs text-slate-500">
-          实体数据将在分析完成后在此展示。请点击"执行分析"按钮对情报进行分析。
-        </p>
+        {item.entities && item.entities.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {item.entities.map((entity) => (
+              <EntityTag
+                key={entity.id}
+                entityType={entity.entity_type}
+                value={entity.entity_value}
+                confidence={entity.confidence}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">
+            {item.status === 'analyzed'
+              ? '分析完成但未提取到实体信息。'
+              : '实体数据将在分析完成后在此展示。请点击"执行分析"按钮对情报进行分析。'}
+          </p>
+        )}
       </div>
     </div>
   );

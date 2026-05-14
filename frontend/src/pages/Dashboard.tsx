@@ -22,8 +22,9 @@ import {
   Loader2,
   Inbox,
   AlertCircle,
+  Download,
 } from 'lucide-react';
-import { getDashboardStats } from '../api';
+import { getDashboardStats, ingestData } from '../api';
 import type { DashboardStats } from '../types';
 import StatsCard from '../components/StatsCard';
 import RiskBadge from '../components/RiskBadge';
@@ -54,6 +55,19 @@ const SOURCE_COLORS = [
   '#14b8a6',
   '#f97316',
 ];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  account_trading: '账号交易',
+  data_leak: '数据泄露',
+  fraud_technique: '欺诈技术',
+  malware_distribution: '恶意软件',
+  phishing: '钓鱼攻击',
+  identity_theft: '身份盗窃',
+  payment_fraud: '支付欺诈',
+  sim_swapping: 'SIM交换',
+  captcha_bypass: '验证码绕过',
+  other: '其他',
+};
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-';
@@ -110,6 +124,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
 
   const fetchStats = useCallback(async (showRefreshing: boolean = false) => {
     try {
@@ -129,6 +144,20 @@ export default function Dashboard() {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
+
+  const handleIngest = async () => {
+    try {
+      setIngesting(true);
+      const result = await ingestData({});
+      alert(`摄入完成：生成 ${result.total_generated} 条，新增 ${result.new_items} 条，重复 ${result.duplicates} 条`);
+      await fetchStats(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '摄入失败';
+      alert(msg);
+    } finally {
+      setIngesting(false);
+    }
+  };
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -225,21 +254,46 @@ export default function Dashboard() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
 
+  const categoryData = Object.entries(stats.category_distribution || {})
+    .map(([key, value], index) => ({
+      name: CATEGORY_LABELS[key] || key,
+      value,
+      fill: SOURCE_COLORS[index % SOURCE_COLORS.length],
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl md:text-2xl font-bold text-white">仪表盘</h1>
-        <button
-          onClick={() => fetchStats(true)}
-          disabled={refreshing}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
-            text-slate-400 hover:text-white hover:bg-slate-700/50
-            transition-colors text-sm disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? '刷新中...' : '刷新'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleIngest}
+            disabled={ingesting}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
+              bg-cyan-500/15 text-cyan-400 border border-cyan-500/30
+              hover:bg-cyan-500/25 transition-colors text-sm disabled:opacity-50"
+          >
+            {ingesting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span>{ingesting ? '摄入中...' : '摄入数据'}</span>
+          </button>
+          <button
+            onClick={() => fetchStats(true)}
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
+              text-slate-400 hover:text-white hover:bg-slate-700/50
+              transition-colors text-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? '刷新中...' : '刷新'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Error banner */}
@@ -367,6 +421,42 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Category Distribution */}
+      {categoryData.length > 0 && (
+        <div className="rounded-xl border border-slate-700 bg-slate-800 p-4 md:p-6">
+          <h2 className="text-base font-semibold text-white mb-4">风险类别分布</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+              data={categoryData}
+              layout="vertical"
+              margin={{ top: 0, right: 10, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+              <XAxis
+                type="number"
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                axisLine={{ stroke: '#334155' }}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                width={80}
+              />
+              <Tooltip content={<CustomBarTooltip />} />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={24}>
+                {categoryData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Recent Intelligence List */}
       <div className="rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">

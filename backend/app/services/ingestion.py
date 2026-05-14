@@ -108,27 +108,26 @@ class IngestionService:
             content_hash = self.compute_content_hash(mock_item["raw_content"])
             existing_id = await self._check_duplicate(db, content_hash)
 
-            is_duplicate = existing_id is not None
-            if is_duplicate:
+            if existing_id is not None:
                 duplicates += 1
-            else:
-                new_items += 1
+                continue
+
+            new_items += 1
 
             item = IntelligenceItem(
                 source_type=mock_item["source_type"],
                 source_name=mock_item["source_name"],
                 raw_content=mock_item["raw_content"],
                 content_hash=content_hash,
-                is_duplicate=is_duplicate,
-                duplicate_of_id=existing_id,
+                is_duplicate=False,
+                duplicate_of_id=None,
                 published_at=mock_item.get("published_at", datetime.datetime.utcnow()),
                 ingested_at=datetime.datetime.utcnow(),
                 status="pending",
             )
 
             db.add(item)
-
-        await db.flush()
+            await db.flush()
 
         logger.info(
             f"模拟数据摄入完成: 生成={total_generated}, 新增={new_items}, 重复={duplicates}"

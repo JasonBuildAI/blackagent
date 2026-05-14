@@ -43,6 +43,7 @@ export interface DashboardStats {
   total_items: number;
   risk_distribution: Record<string, number>;
   source_distribution: Record<string, number>;
+  category_distribution: Record<string, number>;
   recent_items: IntelligenceItem[];
   critical_alerts: number;
   analyzed_count: number;
@@ -66,9 +67,8 @@ export interface IntelligenceListParams {
 }
 
 export interface IngestPayload {
-  source_type: string;
-  source_name: string;
-  raw_content: string;
+  source_types?: string[];
+  count?: number;
 }
 
 export interface BatchAnalyzeResponse {

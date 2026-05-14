@@ -31,67 +31,7 @@ router = APIRouter(prefix="/api/analysis", tags=["情报分析"])
 
 
 async def _reload_llm_config(db: AsyncSession):
-    """重新加载 LLM 配置"""
     await llm_service.reload_config_from_db(db)
-
-
-@router.post("/{intelligence_id}", response_model=AnalysisReportResponse)
-async def analyze_single(
-    intelligence_id: str,
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    对单条情报执行完整分析流程：
-    1. 内容清洗
-    2. 风险分类
-    3. 实体提取
-    4. 深度分析（生成分析报告）
-    """
-    # 获取情报
-    stmt = select(IntelligenceItem).where(IntelligenceItem.id == intelligence_id)
-    result = await db.execute(stmt)
-    item = result.scalar_one_or_none()
-
-    if not item:
-        raise HTTPException(status_code=404, detail=f"情报不存在: {intelligence_id}")
-
-    if item.is_duplicate:
-        raise HTTPException(
-            status_code=400,
-            detail=f"该情报已被标记为重复，无法分析。请先处理重复项。",
-        )
-
-    try:
-        # 重新加载 LLM 配置（可能已在前端更新）
-        await _reload_llm_config(db)
-
-        # 1. 清洗内容
-        logger.info(f"开始清洗: {intelligence_id}")
-        await cleaner_service.clean_content(db, item)
-
-        # 2. 风险分类
-        logger.info(f"开始分类: {intelligence_id}")
-        await classifier_service.classify(db, item)
-
-        # 3. 实体提取
-        logger.info(f"开始提取实体: {intelligence_id}")
-        await extractor_service.extract(db, item)
-
-        # 4. 深度分析
-        logger.info(f"开始深度分析: {intelligence_id}")
-        report = await analyzer_service.analyze(db, item)
-
-        # 刷新以获取关联数据
-        await db.refresh(item)
-
-        return AnalysisReportResponse.model_validate(report)
-
-    except Exception as e:
-        logger.error(f"分析失败 {intelligence_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"分析失败: {str(e)}",
-        )
 
 
 @router.post("/batch", response_model=BatchAnalyzeResponse)
@@ -111,7 +51,6 @@ async def analyze_batch(
     if request.intelligence_ids:
         ids_to_analyze = request.intelligence_ids
     else:
-        # 按条件筛选未分析的情报
         stmt = select(IntelligenceItem.id).where(
             IntelligenceItem.status != "analyzed",
             IntelligenceItem.is_duplicate == False,  # noqa: E712
@@ -133,7 +72,6 @@ async def analyze_batch(
             errors=["没有找到需要分析的情报"],
         )
 
-    # 对每个条目执行完整分析流程
     total = len(ids_to_analyze)
     analyzed = 0
     skipped = 0
@@ -157,10 +95,8 @@ async def analyze_batch(
                 skipped += 1
                 continue
 
-            # 重新加载 LLM 配置
             await _reload_llm_config(db)
 
-            # 完整分析流程
             await cleaner_service.clean_content(db, item)
             await classifier_service.classify(db, item)
             await extractor_service.extract(db, item)
@@ -178,6 +114,52 @@ async def analyze_batch(
         skipped=skipped,
         errors=errors,
     )
+
+
+@router.post("/{intelligence_id}", response_model=AnalysisReportResponse)
+async def analyze_single(
+    intelligence_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    对单条情报执行完整分析流程：
+    1. 内容清洗
+    2. 风险分类
+    3. 实体提取
+    4. 深度分析（生成分析报告）
+    """
+    stmt = select(IntelligenceItem).where(IntelligenceItem.id == intelligence_id)
+    result = await db.execute(stmt)
+    item = result.scalar_one_or_none()
+
+    if not item:
+        raise HTTPException(status_code=404, detail=f"情报不存在: {intelligence_id}")
+
+    try:
+        await _reload_llm_config(db)
+
+        logger.info(f"开始清洗: {intelligence_id}")
+        await cleaner_service.clean_content(db, item)
+
+        logger.info(f"开始分类: {intelligence_id}")
+        await classifier_service.classify(db, item)
+
+        logger.info(f"开始提取实体: {intelligence_id}")
+        await extractor_service.extract(db, item)
+
+        logger.info(f"开始深度分析: {intelligence_id}")
+        report = await analyzer_service.analyze(db, item)
+
+        await db.refresh(item)
+
+        return AnalysisReportResponse.model_validate(report)
+
+    except Exception as e:
+        logger.error(f"分析失败 {intelligence_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"分析失败: {str(e)}",
+        )
 
 
 @router.get("/{intelligence_id}", response_model=AnalysisReportResponse)
