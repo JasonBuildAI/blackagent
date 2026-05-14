@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import IntelligenceList from './pages/IntelligenceList';
 import IntelligenceDetail from './pages/IntelligenceDetail';
 import AnalysisReport from './pages/AnalysisReport';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/intelligence" element={<IntelligenceList />} />
         <Route path="/intelligence/:id" element={<IntelligenceDetail />} />
         <Route path="/analysis/:intelligenceId" element={<AnalysisReport />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>
   );

@@ -48,6 +48,7 @@ async def init_db():
     async with engine.begin() as conn:
         # 导入所有模型以确保它们被注册
         from app.models.intelligence import IntelligenceItem, Entity, AnalysisReport  # noqa: F401
+        from app.models.settings import SystemSetting  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
 
 

@@ -7,6 +7,8 @@ import type {
   AnalysisReport,
   IngestPayload,
   BatchAnalyzeResponse,
+  SettingsResponse,
+  LLMConfig,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
@@ -84,6 +86,27 @@ export async function getAnalysisReport(intelligenceId: string): Promise<Analysi
 
 export async function deleteIntelligence(id: string): Promise<{ message: string }> {
   const response = await apiClient.delete<{ message: string }>(`/intelligence/${id}`);
+  return response.data;
+}
+
+// Settings API
+export async function getSettings(): Promise<SettingsResponse> {
+  const response = await apiClient.get<SettingsResponse>('/settings');
+  return response.data;
+}
+
+export async function getLLMConfig(): Promise<LLMConfig> {
+  const response = await apiClient.get<LLMConfig>('/settings/llm');
+  return response.data;
+}
+
+export async function updateSetting(key: string, value: string): Promise<{ key: string; value: string; description: string; updated_at: string | null }> {
+  const response = await apiClient.put(`/settings/${key}`, { value });
+  return response.data;
+}
+
+export async function testLLMConnection(): Promise<{ success: boolean; message: string }> {
+  const response = await apiClient.post('/settings/llm/test');
   return response.data;
 }
 

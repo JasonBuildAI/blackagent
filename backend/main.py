@@ -21,8 +21,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import init_db, close_db
-from app.config import settings
-from app.routers import intelligence, analysis
+from app.config import settings as app_settings
+from app.routers import intelligence, analysis, settings
 
 # 配置日志
 logging.basicConfig(
@@ -44,8 +44,16 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("数据库初始化完成")
 
+    # 初始化默认设置
+    from app.services.settings_service import settings_service
+    from app.database import async_session_factory
+
+    async with async_session_factory() as db:
+        await settings_service.init_default_settings(db)
+        logger.info("系统设置初始化完成")
+
     # 如果需要，填充模拟数据
-    if settings.SEED_ON_STARTUP:
+    if app_settings.SEED_ON_STARTUP:
         from app.services.ingestion import ingestion_service
         from app.database import async_session_factory
 
@@ -59,8 +67,8 @@ async def lifespan(app: FastAPI):
                 f"新增={result['new_items']}, 重复={result['duplicates']}"
             )
 
-    logger.info(f"LLM服务状态: {'已启用' if settings.LLM_ENABLED else '未启用 (使用规则引擎)'}")
-    logger.info(f"服务地址: http://{settings.HOST}:{settings.PORT}")
+    logger.info(f"LLM服务状态: {'已启用' if app_settings.LLM_ENABLED else '未启用 (使用规则引擎)'}")
+    logger.info(f"服务地址: http://{app_settings.HOST}:{app_settings.PORT}")
     logger.info("=" * 60)
 
     yield
@@ -106,6 +114,7 @@ async def health_check():
 # 注册路由
 app.include_router(intelligence.router)
 app.include_router(analysis.router)
+app.include_router(settings.router)
 
 
 # 全局异常处理
@@ -124,7 +133,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.RELOAD,
+        host=app_settings.HOST,
+        port=app_settings.PORT,
+        reload=app_settings.RELOAD,
     )

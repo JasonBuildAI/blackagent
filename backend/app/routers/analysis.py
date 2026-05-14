@@ -23,10 +23,16 @@ from app.services.cleaner import cleaner_service
 from app.services.classifier import classifier_service
 from app.services.extractor import extractor_service
 from app.services.analyzer import analyzer_service
+from app.services.llm_service import llm_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analysis", tags=["情报分析"])
+
+
+async def _reload_llm_config(db: AsyncSession):
+    """重新加载 LLM 配置"""
+    await llm_service.reload_config_from_db(db)
 
 
 @router.post("/{intelligence_id}", response_model=AnalysisReportResponse)
@@ -56,6 +62,9 @@ async def analyze_single(
         )
 
     try:
+        # 重新加载 LLM 配置（可能已在前端更新）
+        await _reload_llm_config(db)
+
         # 1. 清洗内容
         logger.info(f"开始清洗: {intelligence_id}")
         await cleaner_service.clean_content(db, item)
@@ -147,6 +156,9 @@ async def analyze_batch(
             if item.is_duplicate:
                 skipped += 1
                 continue
+
+            # 重新加载 LLM 配置
+            await _reload_llm_config(db)
 
             # 完整分析流程
             await cleaner_service.clean_content(db, item)

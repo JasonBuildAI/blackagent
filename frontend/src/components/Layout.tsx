@@ -8,6 +8,7 @@ import {
   Shield,
   Menu,
   X,
+  Settings,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -24,6 +25,11 @@ const navItems = [
     to: '/intelligence',
     label: '情报列表',
     icon: FileSearch,
+  },
+  {
+    to: '/settings',
+    label: '系统设置',
+    icon: Settings,
   },
 ];
 

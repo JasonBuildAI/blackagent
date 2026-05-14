@@ -1,8 +1,7 @@
 """
 LLM 服务
 
-当 LLM_ENABLED=True 且有有效 API 密钥时，
-通过 httpx 调用 OpenAI 兼容 API。
+支持从数据库动态加载配置。
 当 LLM 不可用时，所有方法返回 None，
 调用方自动回退到基于规则的实现。
 """
@@ -20,21 +19,45 @@ logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    """LLM 服务封装，支持自动降级"""
+    """LLM 服务封装，支持自动降级和动态配置"""
 
     def __init__(self):
+        # 从环境变量读取初始配置
+        self._env_api_key = settings.LLM_API_KEY
+        self._env_api_base = settings.LLM_API_BASE
+        self._env_model = settings.LLM_MODEL
+
+        # 当前配置（可能被动态更新）
         self.enabled = settings.LLM_ENABLED
-        self.api_base = settings.LLM_API_BASE.rstrip("/")
-        self.api_key = settings.LLM_API_KEY
-        self.model = settings.LLM_MODEL
+        self.api_base = self._env_api_base.rstrip("/")
+        self.api_key = self._env_api_key
+        self.model = self._env_model
         self.timeout = settings.LLM_TIMEOUT
         self.max_retries = settings.LLM_MAX_RETRIES
         self.retry_backoff = settings.LLM_RETRY_BACKOFF
 
         if self.enabled:
-            logger.info(f"LLM服务已启用: model={self.model}, base={self.api_base}")
+            logger.info(f"LLM服务已启用(环境变量): model={self.model}, base={self.api_base}")
         else:
-            logger.info("LLM服务未启用，将使用基于规则的降级方案")
+            logger.info("LLM服务未启用(环境变量)，将使用基于规则的降级方案，或等待前端配置")
+
+    async def reload_config_from_db(self, db) -> bool:
+        """从数据库重新加载配置"""
+        try:
+            from app.services.settings_service import settings_service
+            config = await settings_service.get_llm_config(db)
+
+            self.api_key = config["api_key"] or self._env_api_key
+            self.api_base = config["api_base"].rstrip("/") or self._env_api_base.rstrip("/")
+            self.model = config["model"] or self._env_model
+            self.enabled = bool(self.api_key and self.api_key.strip())
+
+            if self.enabled:
+                logger.info(f"LLM配置已更新(数据库): model={self.model}")
+            return True
+        except Exception as e:
+            logger.error(f"从数据库加载LLM配置失败: {e}")
+            return False
 
     def _build_headers(self) -> Dict[str, str]:
         return {

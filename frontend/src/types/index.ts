@@ -78,6 +78,23 @@ export interface BatchAnalyzeResponse {
   errors: string[];
 }
 
+// Settings types
+export interface SettingItem {
+  value: string;
+  description: string;
+  updated_at: string | null;
+}
+
+export interface SettingsResponse {
+  settings: Record<string, SettingItem>;
+}
+
+export interface LLMConfig {
+  api_base: string;
+  model: string;
+  enabled: boolean;
+}
+
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low';
 export type IntelligenceStatus = 'pending' | 'processing' | 'analyzed';
 export type EntityType = 'slang_term' | 'link' | 'account' | 'tool' | 'phone' | 'email' | 'crypto_address';
