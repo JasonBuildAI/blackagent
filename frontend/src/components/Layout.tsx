@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   Settings,
+  Radio,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -25,6 +26,11 @@ const navItems = [
     to: '/intelligence',
     label: '情报列表',
     icon: FileSearch,
+  },
+  {
+    to: '/sources',
+    label: '数据源',
+    icon: Radio,
   },
   {
     to: '/settings',

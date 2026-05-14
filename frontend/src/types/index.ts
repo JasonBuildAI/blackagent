@@ -98,3 +98,26 @@ export interface LLMConfig {
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low';
 export type IntelligenceStatus = 'pending' | 'processing' | 'analyzed';
 export type EntityType = 'slang_term' | 'link' | 'account' | 'tool' | 'phone' | 'email' | 'crypto_address';
+
+export interface SourceInfo {
+  id: string;
+  name: string;
+  source_type: string;
+  description: string;
+  requires_api_key: boolean;
+  api_key_name: string | null;
+}
+
+export interface CollectResponse {
+  total_collected: number;
+  total_new: number;
+  total_duplicates: number;
+  source_stats: Record<string, { collected: number; new: number; duplicates: number }>;
+  message: string;
+}
+
+export interface SourceTestResponse {
+  success: boolean;
+  message: string;
+  items_count: number;
+}

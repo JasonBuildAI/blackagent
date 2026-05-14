@@ -32,6 +32,14 @@ class SettingsService:
             "value": "gpt-4o-mini",
             "description": "LLM 模型名称",
         },
+        "tavily_api_key": {
+            "value": "",
+            "description": "Tavily API 密钥，用于Web搜索采集威胁情报（免费注册: https://tavily.com）",
+        },
+        "github_token": {
+            "value": "",
+            "description": "GitHub Personal Access Token，用于提升GitHub安全公告API速率限制（可选）",
+        },
     }
 
     async def init_default_settings(self, db: AsyncSession) -> None:

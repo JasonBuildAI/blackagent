@@ -9,6 +9,9 @@ import type {
   BatchAnalyzeResponse,
   SettingsResponse,
   LLMConfig,
+  SourceInfo,
+  CollectResponse,
+  SourceTestResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -107,6 +110,27 @@ export async function updateSetting(key: string, value: string): Promise<{ key: 
 
 export async function testLLMConnection(): Promise<{ success: boolean; message: string }> {
   const response = await apiClient.post('/settings/llm/test');
+  return response.data;
+}
+
+export async function getSources(): Promise<{ sources: SourceInfo[] }> {
+  const response = await apiClient.get('/sources');
+  return response.data;
+}
+
+export async function collectFromSources(
+  sourceIds?: string[],
+  maxItemsPerSource: number = 20
+): Promise<CollectResponse> {
+  const response = await apiClient.post<CollectResponse>('/sources/collect', {
+    source_ids: sourceIds || null,
+    max_items_per_source: maxItemsPerSource,
+  });
+  return response.data;
+}
+
+export async function testSource(sourceId: string): Promise<SourceTestResponse> {
+  const response = await apiClient.post<SourceTestResponse>(`/sources/${sourceId}/test`);
   return response.data;
 }
 

@@ -77,6 +77,8 @@ export default function Settings() {
   const [apiKey, setApiKey] = useState('');
   const [apiBase, setApiBase] = useState('');
   const [model, setModel] = useState('');
+  const [tavilyKey, setTavilyKey] = useState('');
+  const [githubToken, setGithubToken] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -96,6 +98,8 @@ export default function Settings() {
         setApiKey(settingsData.settings.llm_api_key?.value || '');
         setApiBase(settingsData.settings.llm_api_base?.value || 'https://api.openai.com/v1');
         setModel(settingsData.settings.llm_model?.value || 'gpt-4o-mini');
+        setTavilyKey(settingsData.settings.tavily_api_key?.value || '');
+        setGithubToken(settingsData.settings.github_token?.value || '');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载设置失败';
@@ -120,6 +124,8 @@ export default function Settings() {
         updateSetting('llm_api_key', apiKey),
         updateSetting('llm_api_base', apiBase),
         updateSetting('llm_model', model),
+        updateSetting('tavily_api_key', tavilyKey),
+        updateSetting('github_token', githubToken),
       ]);
 
       // Refresh data
@@ -147,14 +153,12 @@ export default function Settings() {
       setError(null);
       setSuccess(null);
 
-      // First save the settings
       await Promise.all([
         updateSetting('llm_api_key', apiKey),
         updateSetting('llm_api_base', apiBase),
         updateSetting('llm_model', model),
       ]);
 
-      // Then test the connection
       const result = await testLLMConnection();
 
       if (result.success) {
@@ -344,6 +348,38 @@ export default function Settings() {
           <li>配置更改后，新的分析请求会使用新的配置</li>
           <li>可以使用 "测试连接" 按钮验证配置是否正确</li>
         </ul>
+      </div>
+
+      {/* Data Source API Keys */}
+      <div className="rounded-xl border border-slate-700 bg-slate-800 p-6 space-y-6">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Globe className="w-5 h-5 text-cyan-400" />
+          数据源 API 配置
+        </h2>
+
+        <div className="space-y-6">
+          <SettingField
+            icon={Globe}
+            label="Tavily API Key"
+            description="用于 Web 搜索采集威胁情报。免费注册: https://tavily.com (1000次/月)"
+            value={tavilyKey}
+            onChange={setTavilyKey}
+            placeholder="tvly-..."
+            type="password"
+            isLoading={loading}
+          />
+
+          <SettingField
+            icon={Key}
+            label="GitHub Token"
+            description="用于提升 GitHub 安全公告 API 速率限制（可选，不配置也可使用）"
+            value={githubToken}
+            onChange={setGithubToken}
+            placeholder="ghp_..."
+            type="password"
+            isLoading={loading}
+          />
+        </div>
       </div>
     </div>
   );

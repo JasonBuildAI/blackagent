@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 
 from app.database import init_db, close_db
 from app.config import settings as app_settings
-from app.routers import intelligence, analysis, settings
+from app.routers import intelligence, analysis, settings, sources
 
 # 配置日志
 logging.basicConfig(
@@ -116,6 +116,7 @@ async def health_check():
 app.include_router(intelligence.router)
 app.include_router(analysis.router)
 app.include_router(settings.router)
+app.include_router(sources.router)
 
 
 # 全局异常处理
