@@ -12,6 +12,7 @@ import type {
   SourceInfo,
   CollectResponse,
   SourceTestResponse,
+  ProviderInfo,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -131,6 +132,11 @@ export async function collectFromSources(
 
 export async function testSource(sourceId: string): Promise<SourceTestResponse> {
   const response = await apiClient.post<SourceTestResponse>(`/sources/${sourceId}/test`);
+  return response.data;
+}
+
+export async function getModelProviders(): Promise<{ providers: ProviderInfo[] }> {
+  const response = await apiClient.get<{ providers: ProviderInfo[] }>('/settings/providers');
   return response.data;
 }
 

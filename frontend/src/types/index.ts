@@ -121,3 +121,17 @@ export interface SourceTestResponse {
   message: string;
   items_count: number;
 }
+
+export interface ProviderModel {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  api_base: string;
+  description: string;
+  models: ProviderModel[];
+}

@@ -5,7 +5,7 @@
 """
 
 import logging
-from typing import Dict
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.services.settings_service import settings_service
+from app.services.model_providers import get_providers
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,27 @@ class LLMConfigResponse(BaseModel):
     enabled: bool
 
 
+class ProviderModel(BaseModel):
+    """模型信息"""
+    id: str
+    name: str
+    description: str
+
+
+class ProviderInfo(BaseModel):
+    """服务商信息"""
+    id: str
+    name: str
+    api_base: str
+    description: str
+    models: List[ProviderModel]
+
+
+class ProvidersResponse(BaseModel):
+    """服务商列表响应"""
+    providers: List[ProviderInfo]
+
+
 @router.get("", response_model=SettingsListResponse)
 async def get_all_settings(db: AsyncSession = Depends(get_db)):
     """获取所有系统设置"""
@@ -63,6 +85,24 @@ async def get_llm_config(db: AsyncSession = Depends(get_db)):
         api_base=config["api_base"],
         model=config["model"],
         enabled=config["enabled"],
+    )
+
+
+@router.get("/providers", response_model=ProvidersResponse)
+async def get_model_providers():
+    """获取所有预置模型服务商列表"""
+    providers = get_providers()
+    return ProvidersResponse(
+        providers=[
+            ProviderInfo(
+                id=p["id"],
+                name=p["name"],
+                api_base=p["api_base"],
+                description=p["description"],
+                models=[ProviderModel(**m) for m in p["models"]],
+            )
+            for p in providers
+        ]
     )
 
 

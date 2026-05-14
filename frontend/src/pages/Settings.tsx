@@ -10,96 +10,73 @@ import {
   CheckCircle2,
   RefreshCw,
   TestTube,
+  ChevronDown,
+  Sparkles,
+  Radio,
 } from 'lucide-react';
-import { getSettings, getLLMConfig, updateSetting, testLLMConnection } from '../api';
-import type { SettingsResponse, LLMConfig } from '../types';
-
-interface SettingFieldProps {
-  icon: React.ElementType;
-  label: string;
-  description: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-  disabled?: boolean;
-  isLoading?: boolean;
-}
-
-function SettingField({
-  icon: Icon,
-  label,
-  description,
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  disabled,
-  isLoading,
-}: SettingFieldProps) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Icon className="w-4 h-4 text-slate-400" />
-        <label className="text-sm font-medium text-slate-200">{label}</label>
-      </div>
-      <p className="text-xs text-slate-500">{description}</p>
-      <div className="relative">
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={disabled || isLoading}
-          className="w-full px-3 py-2 rounded-lg bg-slate-700/50 border border-slate-600
-            text-sm text-slate-200 placeholder-slate-500
-            focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
-            transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        />
-        {isLoading && (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 animate-spin" />
-        )}
-      </div>
-    </div>
-  );
-}
+import { getSettings, getLLMConfig, updateSetting, testLLMConnection, getModelProviders } from '../api';
+import type { SettingsResponse, LLMConfig, ProviderInfo } from '../types';
 
 export default function Settings() {
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [llmConfig, setLLMConfig] = useState<LLMConfig | null>(null);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Form values
+  const [selectedProviderId, setSelectedProviderId] = useState('');
+  const [selectedModelId, setSelectedModelId] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [apiBase, setApiBase] = useState('');
-  const [model, setModel] = useState('');
+  const [customBaseUrl, setCustomBaseUrl] = useState('');
+  const [showCustomUrl, setShowCustomUrl] = useState(false);
+
   const [tavilyKey, setTavilyKey] = useState('');
   const [githubToken, setGithubToken] = useState('');
+
+  const selectedProvider = providers.find(p => p.id === selectedProviderId);
+  const availableModels = selectedProvider?.models || [];
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const [settingsData, llmData] = await Promise.all([
+      const [settingsData, llmData, providersData] = await Promise.all([
         getSettings(),
         getLLMConfig(),
+        getModelProviders(),
       ]);
 
       setSettings(settingsData);
       setLLMConfig(llmData);
+      setProviders(providersData.providers);
 
-      // Initialize form values
       if (settingsData.settings) {
         setApiKey(settingsData.settings.llm_api_key?.value || '');
-        setApiBase(settingsData.settings.llm_api_base?.value || 'https://api.openai.com/v1');
-        setModel(settingsData.settings.llm_model?.value || 'gpt-4o-mini');
         setTavilyKey(settingsData.settings.tavily_api_key?.value || '');
         setGithubToken(settingsData.settings.github_token?.value || '');
+
+        const savedBase = settingsData.settings.llm_api_base?.value || '';
+        const savedModel = settingsData.settings.llm_model?.value || '';
+
+        const matchedProvider = providersData.providers.find(p => p.api_base === savedBase);
+        if (matchedProvider) {
+          setSelectedProviderId(matchedProvider.id);
+          setSelectedModelId(savedModel);
+          setShowCustomUrl(false);
+        } else if (savedBase) {
+          setSelectedProviderId('custom');
+          setSelectedModelId(savedModel);
+          setCustomBaseUrl(savedBase);
+          setShowCustomUrl(true);
+        } else {
+          setSelectedProviderId('openai');
+          setSelectedModelId('gpt-4.1-mini');
+          setShowCustomUrl(false);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载设置失败';
@@ -113,26 +90,48 @@ export default function Settings() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (selectedProviderId === 'custom') {
+      setShowCustomUrl(true);
+    } else if (selectedProvider) {
+      setShowCustomUrl(false);
+      if (availableModels.length > 0 && !availableModels.find(m => m.id === selectedModelId)) {
+        setSelectedModelId(availableModels[0].id);
+      }
+    }
+  }, [selectedProviderId]);
+
+  const getApiBase = () => {
+    if (selectedProviderId === 'custom') return customBaseUrl;
+    return selectedProvider?.api_base || '';
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
       setError(null);
       setSuccess(null);
 
-      // Save all settings
+      const baseUrl = getApiBase();
+      if (!baseUrl && selectedProviderId !== '') {
+        setError('请选择或填写 API Base URL');
+        return;
+      }
+      if (!selectedModelId && selectedProviderId !== 'custom') {
+        setError('请选择模型');
+        return;
+      }
+
       await Promise.all([
         updateSetting('llm_api_key', apiKey),
-        updateSetting('llm_api_base', apiBase),
-        updateSetting('llm_model', model),
+        updateSetting('llm_api_base', baseUrl),
+        updateSetting('llm_model', selectedModelId),
         updateSetting('tavily_api_key', tavilyKey),
         updateSetting('github_token', githubToken),
       ]);
 
-      // Refresh data
       await fetchData();
       setSuccess('设置已保存成功');
-
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '保存失败';
@@ -153,17 +152,17 @@ export default function Settings() {
       setError(null);
       setSuccess(null);
 
+      const baseUrl = getApiBase();
       await Promise.all([
         updateSetting('llm_api_key', apiKey),
-        updateSetting('llm_api_base', apiBase),
-        updateSetting('llm_model', model),
+        updateSetting('llm_api_base', baseUrl),
+        updateSetting('llm_model', selectedModelId),
       ]);
 
       const result = await testLLMConnection();
 
       if (result.success) {
         setSuccess(result.message);
-        // Refresh LLM config
         const config = await getLLMConfig();
         setLLMConfig(config);
       } else {
@@ -190,7 +189,6 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-cyan-500/15">
@@ -213,7 +211,6 @@ export default function Settings() {
         </button>
       </div>
 
-      {/* Status Card */}
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${llmConfig?.enabled ? 'bg-emerald-500/15' : 'bg-amber-500/15'}`}>
@@ -237,17 +234,11 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Alert Messages */}
       {error && (
         <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{error}</span>
-          <button
-            onClick={() => setError(null)}
-            className="ml-auto text-red-400 hover:text-red-300"
-          >
-            ✕
-          </button>
+          <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-300">✕</button>
         </div>
       )}
 
@@ -255,53 +246,136 @@ export default function Settings() {
         <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm">
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
           <span>{success}</span>
-          <button
-            onClick={() => setSuccess(null)}
-            className="ml-auto text-emerald-400 hover:text-emerald-300"
-          >
-            ✕
-          </button>
+          <button onClick={() => setSuccess(null)} className="ml-auto text-emerald-400 hover:text-emerald-300">✕</button>
         </div>
       )}
 
-      {/* Settings Form */}
+      {/* LLM Provider Selection */}
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-6 space-y-6">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <Key className="w-5 h-5 text-cyan-400" />
-          LLM 配置
+          <Sparkles className="w-5 h-5 text-cyan-400" />
+          LLM 模型配置
         </h2>
 
         <div className="space-y-6">
-          <SettingField
-            icon={Key}
-            label="API Key"
-            description="你的 OpenAI 兼容 API 密钥。支持 OpenAI、Azure、DeepSeek 等。"
-            value={apiKey}
-            onChange={setApiKey}
-            placeholder="sk-..."
-            type="password"
-            isLoading={loading}
-          />
+          {/* Provider Selector */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-slate-400" />
+              <label className="text-sm font-medium text-slate-200">模型服务商</label>
+            </div>
+            <p className="text-xs text-slate-500">选择 LLM 服务商，系统将自动填充 API 地址</p>
+            <div className="relative">
+              <select
+                value={selectedProviderId}
+                onChange={(e) => setSelectedProviderId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg bg-slate-700/50 border border-slate-600
+                  text-sm text-slate-200
+                  focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
+                  transition-all appearance-none cursor-pointer"
+              >
+                <option value="">请选择服务商...</option>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.api_base ? `(${p.api_base})` : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+            </div>
+            {selectedProvider && (
+              <p className="text-xs text-slate-500">{selectedProvider.description}</p>
+            )}
+          </div>
 
-          <SettingField
-            icon={Globe}
-            label="API Base URL"
-            description="API 基础地址。默认使用 OpenAI 官方 API。"
-            value={apiBase}
-            onChange={setApiBase}
-            placeholder="https://api.openai.com/v1"
-            isLoading={loading}
-          />
+          {/* Model Selector */}
+          {selectedProviderId && selectedProviderId !== 'custom' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-slate-400" />
+                <label className="text-sm font-medium text-slate-200">模型</label>
+              </div>
+              <p className="text-xs text-slate-500">选择具体模型</p>
+              <div className="relative">
+                <select
+                  value={selectedModelId}
+                  onChange={(e) => setSelectedModelId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg bg-slate-700/50 border border-slate-600
+                    text-sm text-slate-200
+                    focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
+                    transition-all appearance-none cursor-pointer"
+                >
+                  <option value="">请选择模型...</option>
+                  {availableModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} - {m.description}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+              </div>
+            </div>
+          )}
 
-          <SettingField
-            icon={Bot}
-            label="模型名称"
-            description="要使用的模型名称。例如：gpt-4o-mini、gpt-4o、deepseek-chat"
-            value={model}
-            onChange={setModel}
-            placeholder="gpt-4o-mini"
-            isLoading={loading}
-          />
+          {/* Custom URL (for custom provider) */}
+          {showCustomUrl && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-slate-400" />
+                <label className="text-sm font-medium text-slate-200">自定义 API Base URL</label>
+              </div>
+              <p className="text-xs text-slate-500">输入自定义 OpenAI 兼容 API 地址</p>
+              <input
+                type="text"
+                value={customBaseUrl}
+                onChange={(e) => setCustomBaseUrl(e.target.value)}
+                placeholder="https://your-api.com/v1"
+                className="w-full px-3 py-2 rounded-lg bg-slate-700/50 border border-slate-600
+                  text-sm text-slate-200 placeholder-slate-500
+                  focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
+                  transition-all"
+              />
+            </div>
+          )}
+
+          {/* Custom Model (for custom provider) */}
+          {selectedProviderId === 'custom' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-slate-400" />
+                <label className="text-sm font-medium text-slate-200">自定义模型名称</label>
+              </div>
+              <input
+                type="text"
+                value={selectedModelId}
+                onChange={(e) => setSelectedModelId(e.target.value)}
+                placeholder="例如: gpt-4, deepseek-chat"
+                className="w-full px-3 py-2 rounded-lg bg-slate-700/50 border border-slate-600
+                  text-sm text-slate-200 placeholder-slate-500
+                  focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
+                  transition-all"
+              />
+            </div>
+          )}
+
+          {/* API Key */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-slate-400" />
+              <label className="text-sm font-medium text-slate-200">API Key</label>
+            </div>
+            <p className="text-xs text-slate-500">对应服务商的 API 密钥</p>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-... 或对应服务商的 API Key"
+              className="w-full px-3 py-2 rounded-lg bg-slate-700/50 border border-slate-600
+                text-sm text-slate-200 placeholder-slate-500
+                focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
+                transition-all"
+            />
+          </div>
         </div>
 
         {/* Actions */}
@@ -313,14 +387,9 @@ export default function Settings() {
               bg-cyan-500/15 text-cyan-400 border border-cyan-500/30
               hover:bg-cyan-500/25 transition-colors disabled:opacity-50"
           >
-            {saving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             <span>{saving ? '保存中...' : '保存设置'}</span>
           </button>
-
           <button
             onClick={handleTest}
             disabled={testing || !apiKey.trim()}
@@ -328,58 +397,65 @@ export default function Settings() {
               bg-slate-700/50 text-slate-300 border border-slate-600
               hover:bg-slate-700 transition-colors disabled:opacity-50"
           >
-            {testing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <TestTube className="w-4 h-4" />
-            )}
+            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
             <span>{testing ? '测试中...' : '测试连接'}</span>
           </button>
         </div>
       </div>
 
-      {/* Help Card */}
-      <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4">
-        <h3 className="text-sm font-medium text-slate-300 mb-2">配置说明</h3>
-        <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
-          <li>API Key 是访问大模型服务的凭证，请妥善保管</li>
-          <li>支持 OpenAI、Azure OpenAI、DeepSeek、Moonshot 等兼容 OpenAI API 格式的服务</li>
-          <li>如果不配置 API Key，系统将使用内置的规则引擎进行分析</li>
-          <li>配置更改后，新的分析请求会使用新的配置</li>
-          <li>可以使用 "测试连接" 按钮验证配置是否正确</li>
-        </ul>
-      </div>
-
       {/* Data Source API Keys */}
       <div className="rounded-xl border border-slate-700 bg-slate-800 p-6 space-y-6">
         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <Globe className="w-5 h-5 text-cyan-400" />
+          <Radio className="w-5 h-5 text-cyan-400" />
           数据源 API 配置
         </h2>
-
         <div className="space-y-6">
-          <SettingField
-            icon={Globe}
-            label="Tavily API Key"
-            description="用于 Web 搜索采集威胁情报。免费注册: https://tavily.com (1000次/月)"
-            value={tavilyKey}
-            onChange={setTavilyKey}
-            placeholder="tvly-..."
-            type="password"
-            isLoading={loading}
-          />
-
-          <SettingField
-            icon={Key}
-            label="GitHub Token"
-            description="用于提升 GitHub 安全公告 API 速率限制（可选，不配置也可使用）"
-            value={githubToken}
-            onChange={setGithubToken}
-            placeholder="ghp_..."
-            type="password"
-            isLoading={loading}
-          />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-slate-400" />
+              <label className="text-sm font-medium text-slate-200">Tavily API Key</label>
+            </div>
+            <p className="text-xs text-slate-500">用于 Web 搜索采集威胁情报。免费注册: https://tavily.com (1000次/月)</p>
+            <input
+              type="password"
+              value={tavilyKey}
+              onChange={(e) => setTavilyKey(e.target.value)}
+              placeholder="tvly-..."
+              className="w-full px-3 py-2 rounded-lg bg-slate-700/50 border border-slate-600
+                text-sm text-slate-200 placeholder-slate-500
+                focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
+                transition-all"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Key className="w-4 h-4 text-slate-400" />
+              <label className="text-sm font-medium text-slate-200">GitHub Token</label>
+            </div>
+            <p className="text-xs text-slate-500">用于提升 GitHub 安全公告 API 速率限制（可选）</p>
+            <input
+              type="password"
+              value={githubToken}
+              onChange={(e) => setGithubToken(e.target.value)}
+              placeholder="ghp_..."
+              className="w-full px-3 py-2 rounded-lg bg-slate-700/50 border border-slate-600
+                text-sm text-slate-200 placeholder-slate-500
+                focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30
+                transition-all"
+            />
+          </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4">
+        <h3 className="text-sm font-medium text-slate-300 mb-2">配置说明</h3>
+        <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
+          <li>选择服务商后，API Base URL 会自动填充，无需手动填写</li>
+          <li>选择模型后，模型名称会自动填充</li>
+          <li>只需填写对应服务商的 API Key 即可使用</li>
+          <li>支持 OpenAI、DeepSeek、智谱 GLM、Kimi、通义千问、豆包、SiliconFlow 等</li>
+          <li>如果不配置 API Key，系统将使用内置的规则引擎进行分析</li>
+        </ul>
       </div>
     </div>
   );
